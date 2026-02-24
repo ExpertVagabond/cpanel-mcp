@@ -1,0 +1,29 @@
+# Node
+node_modules/
+typescript/build/
+*.tgz
+
+# Python
+__pycache__/
+*.pyc
+*.egg-info/
+dist/
+.venv/
+.ruff_cache/
+
+# Go
+go/bin/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Environment
+.env
+.env.local
