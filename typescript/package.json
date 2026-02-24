@@ -1,0 +1,55 @@
+{
+  "name": "cpanel-mcp",
+  "version": "0.1.0",
+  "mcpName": "io.github.ExpertVagabond/cpanel",
+  "description": "cPanel & WHM MCP Server — manage hosting via Model Context Protocol (47 tools: email, DNS, MySQL, SSL, files, backups, FTP, cron, domains, PHP, accounts, services)",
+  "type": "module",
+  "bin": {
+    "cpanel-mcp": "build/index.js"
+  },
+  "files": [
+    "build/index.js"
+  ],
+  "scripts": {
+    "build": "tsc && node esbuild.config.js",
+    "prepublishOnly": "npm run build",
+    "watch": "tsc --watch",
+    "inspector": "npx @modelcontextprotocol/inspector build/index.js"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/ExpertVagabond/cpanel-mcp.git"
+  },
+  "homepage": "https://github.com/ExpertVagabond/cpanel-mcp",
+  "bugs": {
+    "url": "https://github.com/ExpertVagabond/cpanel-mcp/issues"
+  },
+  "keywords": [
+    "cpanel",
+    "whm",
+    "hosting",
+    "mcp",
+    "model-context-protocol",
+    "ai",
+    "email",
+    "dns",
+    "mysql",
+    "ssl",
+    "server-management"
+  ],
+  "author": "Purple Squirrel Media",
+  "license": "MIT",
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.8.0",
+    "zod": "^3.23.8",
+    "zod-to-json-schema": "^3.23.5"
+  },
+  "devDependencies": {
+    "@types/node": "^20.11.24",
+    "esbuild": "^0.25.2",
+    "typescript": "^5.3.3"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}
