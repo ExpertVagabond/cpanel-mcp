@@ -1,6 +1,6 @@
 {
   "name": "cpanel-mcp",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "mcpName": "io.github.ExpertVagabond/cpanel",
   "description": "cPanel & WHM MCP Server — manage hosting via Model Context Protocol (47 tools: email, DNS, MySQL, SSL, files, backups, FTP, cron, domains, PHP, accounts, services)",
   "type": "module",

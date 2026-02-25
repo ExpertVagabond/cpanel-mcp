@@ -1,0 +1,572 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>cpanel-mcp — AI-Powered Hosting Control</title>
+<meta name="description" content="Open-source MCP server that gives AI assistants full control over cPanel hosting. 47 tools. 14 categories. TypeScript, Python, Go.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@400;600;700&family=IBM+Plex+Sans:wght@400;500&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --bg:#060608;--surface:#0c0c10;--surface2:#12121a;--border:#1a1a2e;
+  --green:#00ffaa;--green-dim:#00cc88;--blue:#4d7cff;--amber:#ffaa00;
+  --text:#c8c8d4;--text-muted:#666680;--text-bright:#eeeef4;
+  --font-display:'Chakra Petch',sans-serif;
+  --font-body:'IBM Plex Sans',sans-serif;
+  --font-mono:'JetBrains Mono',monospace;
+}
+html{scroll-behavior:smooth;background:var(--bg)}
+body{font-family:var(--font-body);color:var(--text);background:var(--bg);overflow-x:hidden;-webkit-font-smoothing:antialiased}
+a{color:var(--green);text-decoration:none;transition:color .2s}
+a:hover{color:var(--green-dim)}
+
+/* === GRID OVERLAY === */
+.grid-overlay{
+  position:fixed;inset:0;pointer-events:none;z-index:0;
+  background-image:
+    linear-gradient(rgba(0,255,170,.015) 1px,transparent 1px),
+    linear-gradient(90deg,rgba(0,255,170,.015) 1px,transparent 1px);
+  background-size:60px 60px;
+}
+.scanline{
+  position:fixed;inset:0;pointer-events:none;z-index:9999;
+  background:repeating-linear-gradient(0deg,transparent,transparent 2px,rgba(0,0,0,.03) 2px,rgba(0,0,0,.03) 4px);
+}
+
+/* === LAYOUT === */
+.container{max-width:1120px;margin:0 auto;padding:0 24px;position:relative;z-index:1}
+section{padding:100px 0}
+
+/* === NAV === */
+nav{
+  position:fixed;top:0;left:0;right:0;z-index:100;
+  padding:16px 0;
+  background:rgba(6,6,8,.85);backdrop-filter:blur(20px);
+  border-bottom:1px solid var(--border);
+}
+nav .container{display:flex;align-items:center;justify-content:space-between}
+.nav-logo{font-family:var(--font-mono);font-size:15px;font-weight:500;color:var(--green);letter-spacing:-.5px}
+.nav-logo span{color:var(--text-muted)}
+.nav-links{display:flex;gap:28px;align-items:center}
+.nav-links a{font-family:var(--font-mono);font-size:13px;color:var(--text-muted);letter-spacing:.5px;text-transform:uppercase}
+.nav-links a:hover{color:var(--text-bright)}
+.nav-badge{
+  display:inline-flex;align-items:center;gap:6px;
+  padding:5px 12px;border:1px solid var(--border);border-radius:6px;
+  font-family:var(--font-mono);font-size:12px;color:var(--text-muted);
+  transition:border-color .2s;
+}
+.nav-badge:hover{border-color:var(--green)}
+.nav-badge svg{width:16px;height:16px}
+
+/* === HERO === */
+.hero{
+  padding:180px 0 100px;
+  position:relative;
+}
+.hero::before{
+  content:'';position:absolute;top:80px;left:50%;transform:translateX(-50%);
+  width:600px;height:600px;
+  background:radial-gradient(circle,rgba(0,255,170,.06) 0%,transparent 70%);
+  pointer-events:none;
+}
+.hero-badge{
+  display:inline-flex;align-items:center;gap:8px;
+  padding:6px 14px;border:1px solid var(--border);border-radius:100px;
+  font-family:var(--font-mono);font-size:12px;color:var(--text-muted);
+  margin-bottom:32px;
+  animation:fadeUp .6s ease both;
+}
+.hero-badge .dot{width:6px;height:6px;border-radius:50%;background:var(--green);animation:pulse 2s infinite}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.4}}
+.hero h1{
+  font-family:var(--font-display);
+  font-size:clamp(42px,7vw,80px);font-weight:700;
+  line-height:1;letter-spacing:-2px;
+  color:var(--text-bright);
+  margin-bottom:24px;
+  animation:fadeUp .6s ease .1s both;
+}
+.hero h1 .accent{color:var(--green)}
+.hero .subtitle{
+  font-size:18px;line-height:1.6;color:var(--text-muted);
+  max-width:540px;
+  animation:fadeUp .6s ease .2s both;
+}
+@keyframes fadeUp{from{opacity:0;transform:translateY(20px)}to{opacity:1;transform:none}}
+
+/* === INSTALL BLOCK === */
+.install-block{
+  margin-top:48px;
+  display:flex;flex-direction:column;gap:10px;
+  max-width:480px;
+  animation:fadeUp .6s ease .3s both;
+}
+.install-row{
+  display:flex;align-items:center;
+  background:var(--surface);border:1px solid var(--border);border-radius:8px;
+  overflow:hidden;
+  transition:border-color .2s;
+}
+.install-row:hover{border-color:rgba(0,255,170,.3)}
+.install-lang{
+  padding:10px 14px;
+  font-family:var(--font-mono);font-size:11px;
+  color:var(--text-muted);text-transform:uppercase;letter-spacing:1px;
+  background:var(--surface2);border-right:1px solid var(--border);
+  min-width:44px;text-align:center;
+  user-select:none;
+}
+.install-cmd{
+  flex:1;padding:10px 16px;
+  font-family:var(--font-mono);font-size:14px;color:var(--green);
+  white-space:nowrap;overflow-x:auto;
+}
+.install-copy{
+  padding:10px 14px;cursor:pointer;
+  background:none;border:none;color:var(--text-muted);
+  font-family:var(--font-mono);font-size:12px;
+  transition:color .2s;user-select:none;
+}
+.install-copy:hover{color:var(--green)}
+.install-copy.copied{color:var(--green)}
+
+/* === STATS BAR === */
+.stats{
+  padding:40px 0;
+  border-top:1px solid var(--border);border-bottom:1px solid var(--border);
+  background:var(--surface);
+}
+.stats-grid{
+  display:grid;grid-template-columns:repeat(4,1fr);gap:0;
+}
+.stat{text-align:center;padding:20px;position:relative}
+.stat:not(:last-child)::after{
+  content:'';position:absolute;right:0;top:20%;height:60%;width:1px;background:var(--border);
+}
+.stat-num{font-family:var(--font-display);font-size:36px;font-weight:700;color:var(--green);line-height:1}
+.stat-label{font-family:var(--font-mono);font-size:11px;color:var(--text-muted);text-transform:uppercase;letter-spacing:1.5px;margin-top:8px}
+
+/* === TOOLS GRID === */
+#tools h2{
+  font-family:var(--font-display);font-size:36px;font-weight:700;
+  color:var(--text-bright);letter-spacing:-1px;margin-bottom:12px;
+}
+#tools .section-sub{font-size:15px;color:var(--text-muted);margin-bottom:56px;max-width:480px}
+.tools-grid{
+  display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:1px;
+  background:var(--border);border:1px solid var(--border);border-radius:12px;overflow:hidden;
+}
+.tool-card{
+  background:var(--surface);padding:28px 24px;
+  position:relative;transition:background .25s;
+}
+.tool-card:hover{background:var(--surface2)}
+.tool-card::before{
+  content:'';position:absolute;top:0;left:0;right:0;height:2px;
+  background:var(--green);transform:scaleX(0);transform-origin:left;
+  transition:transform .3s ease;
+}
+.tool-card:hover::before{transform:scaleX(1)}
+.tool-icon{
+  font-size:20px;margin-bottom:14px;display:block;
+  width:40px;height:40px;
+  display:flex;align-items:center;justify-content:center;
+  border:1px solid var(--border);border-radius:8px;
+  background:var(--bg);
+}
+.tool-card h3{
+  font-family:var(--font-display);font-size:15px;font-weight:600;
+  color:var(--text-bright);margin-bottom:6px;
+}
+.tool-card p{font-size:13px;line-height:1.5;color:var(--text-muted)}
+.tool-count{
+  font-family:var(--font-mono);font-size:11px;color:var(--green);
+  margin-top:10px;display:inline-block;
+}
+
+/* === HOW IT WORKS === */
+#how-it-works{background:var(--surface);border-top:1px solid var(--border);border-bottom:1px solid var(--border)}
+#how-it-works h2{
+  font-family:var(--font-display);font-size:36px;font-weight:700;
+  color:var(--text-bright);letter-spacing:-1px;margin-bottom:56px;text-align:center;
+}
+.flow{display:flex;align-items:stretch;gap:0;position:relative}
+.flow-step{
+  flex:1;padding:32px 28px;
+  border:1px solid var(--border);
+  background:var(--bg);
+  position:relative;
+}
+.flow-step:first-child{border-radius:12px 0 0 12px}
+.flow-step:last-child{border-radius:0 12px 12px 0}
+.flow-step:not(:last-child){border-right:none}
+.flow-num{
+  font-family:var(--font-mono);font-size:11px;color:var(--green);
+  letter-spacing:2px;text-transform:uppercase;margin-bottom:16px;
+}
+.flow-step h3{
+  font-family:var(--font-display);font-size:18px;font-weight:600;
+  color:var(--text-bright);margin-bottom:10px;
+}
+.flow-step p{font-size:14px;line-height:1.6;color:var(--text-muted)}
+.flow-arrow{
+  position:absolute;right:-14px;top:50%;transform:translateY(-50%);z-index:2;
+  width:28px;height:28px;
+  background:var(--surface);border:1px solid var(--border);border-radius:50%;
+  display:flex;align-items:center;justify-content:center;
+  color:var(--green);font-size:14px;
+}
+
+/* === TERMINAL DEMO === */
+.terminal{
+  margin-top:64px;
+  border:1px solid var(--border);border-radius:12px;overflow:hidden;
+  background:var(--bg);max-width:700px;margin-left:auto;margin-right:auto;
+}
+.terminal-bar{
+  display:flex;align-items:center;gap:8px;
+  padding:12px 16px;background:var(--surface2);border-bottom:1px solid var(--border);
+}
+.terminal-dot{width:10px;height:10px;border-radius:50%;border:1.5px solid var(--border)}
+.terminal-dot:nth-child(1){border-color:#ff5f57}
+.terminal-dot:nth-child(2){border-color:#febc2e}
+.terminal-dot:nth-child(3){border-color:#28c840}
+.terminal-title{font-family:var(--font-mono);font-size:11px;color:var(--text-muted);margin-left:auto;margin-right:auto}
+.terminal-body{padding:20px;font-family:var(--font-mono);font-size:13px;line-height:1.8}
+.terminal-body .prompt{color:var(--green)}
+.terminal-body .cmd{color:var(--text-bright)}
+.terminal-body .output{color:var(--text-muted)}
+.terminal-body .highlight{color:var(--amber)}
+
+/* === CONFIG EXAMPLE === */
+#config{padding-bottom:120px}
+#config h2{
+  font-family:var(--font-display);font-size:36px;font-weight:700;
+  color:var(--text-bright);letter-spacing:-1px;margin-bottom:12px;
+}
+#config .section-sub{font-size:15px;color:var(--text-muted);margin-bottom:40px;max-width:520px}
+.config-grid{display:grid;grid-template-columns:1fr 1fr;gap:24px}
+.config-block{
+  border:1px solid var(--border);border-radius:12px;overflow:hidden;background:var(--surface);
+}
+.config-header{
+  padding:14px 20px;background:var(--surface2);border-bottom:1px solid var(--border);
+  font-family:var(--font-mono);font-size:12px;color:var(--text-muted);
+  display:flex;align-items:center;gap:8px;
+}
+.config-header .file-icon{color:var(--amber);font-size:14px}
+pre.config-code{
+  padding:20px;margin:0;
+  font-family:var(--font-mono);font-size:13px;line-height:1.7;
+  color:var(--text);overflow-x:auto;
+}
+pre.config-code .key{color:var(--blue)}
+pre.config-code .str{color:var(--green)}
+pre.config-code .comment{color:var(--text-muted)}
+
+/* === FOOTER === */
+footer{
+  padding:40px 0;border-top:1px solid var(--border);
+}
+footer .container{display:flex;align-items:center;justify-content:space-between}
+.footer-left{font-family:var(--font-mono);font-size:12px;color:var(--text-muted)}
+.footer-links{display:flex;gap:20px}
+.footer-links a{font-family:var(--font-mono);font-size:12px;color:var(--text-muted)}
+.footer-links a:hover{color:var(--green)}
+
+/* === RESPONSIVE === */
+@media(max-width:768px){
+  section{padding:72px 0}
+  .hero{padding:140px 0 72px}
+  .hero h1{letter-spacing:-1px}
+  .stats-grid{grid-template-columns:repeat(2,1fr)}
+  .stat:nth-child(2)::after{display:none}
+  .tools-grid{grid-template-columns:1fr 1fr}
+  .flow{flex-direction:column}
+  .flow-step{border-radius:0!important;border-right:1px solid var(--border)!important;border-bottom:none}
+  .flow-step:first-child{border-radius:12px 12px 0 0!important}
+  .flow-step:last-child{border-radius:0 0 12px 12px!important;border-bottom:1px solid var(--border)!important}
+  .flow-arrow{right:50%;top:auto;bottom:-14px;transform:translateX(50%) rotate(90deg)}
+  .config-grid{grid-template-columns:1fr}
+  .nav-links a:not(.nav-badge){display:none}
+  footer .container{flex-direction:column;gap:16px;text-align:center}
+}
+@media(max-width:480px){
+  .tools-grid{grid-template-columns:1fr}
+  .stats-grid{grid-template-columns:1fr 1fr}
+}
+
+/* === SCROLL REVEAL === */
+.reveal{opacity:0;transform:translateY(24px);transition:opacity .6s ease,transform .6s ease}
+.reveal.visible{opacity:1;transform:none}
+</style>
+</head>
+<body>
+
+<div class="grid-overlay"></div>
+<div class="scanline"></div>
+
+<!-- NAV -->
+<nav>
+  <div class="container">
+    <a href="#" class="nav-logo">cpanel<span>-mcp</span></a>
+    <div class="nav-links">
+      <a href="#tools">Tools</a>
+      <a href="#how-it-works">How It Works</a>
+      <a href="#config">Config</a>
+      <a href="https://github.com/ExpertVagabond/cpanel-mcp" target="_blank" class="nav-badge">
+        <svg viewBox="0 0 16 16" fill="currentColor"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"/></svg>
+        GitHub
+      </a>
+    </div>
+  </div>
+</nav>
+
+<!-- HERO -->
+<section class="hero">
+  <div class="container">
+    <div class="hero-badge"><span class="dot"></span> Open Source &middot; MIT License</div>
+    <h1>Hosting control<br>for <span class="accent">AI agents</span></h1>
+    <p class="subtitle">An MCP server that gives Claude, GPT, and any AI assistant full control over cPanel hosting. 47 tools across email, DNS, databases, files, SSL, and more.</p>
+
+    <div class="install-block">
+      <div class="install-row">
+        <span class="install-lang">ts</span>
+        <code class="install-cmd">npx cpanel-mcp</code>
+        <button class="install-copy" onclick="copyCmd(this,'npx cpanel-mcp')">copy</button>
+      </div>
+      <div class="install-row">
+        <span class="install-lang">py</span>
+        <code class="install-cmd">uvx cpanel-mcp</code>
+        <button class="install-copy" onclick="copyCmd(this,'uvx cpanel-mcp')">copy</button>
+      </div>
+      <div class="install-row">
+        <span class="install-lang">go</span>
+        <code class="install-cmd">go install github.com/ExpertVagabond/cpanel-mcp/cmd/cpanel-mcp@latest</code>
+        <button class="install-copy" onclick="copyCmd(this,'go install github.com/ExpertVagabond/cpanel-mcp/cmd/cpanel-mcp@latest')">copy</button>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- STATS -->
+<section class="stats" style="padding:0">
+  <div class="container">
+    <div class="stats-grid">
+      <div class="stat"><div class="stat-num">47</div><div class="stat-label">Tools</div></div>
+      <div class="stat"><div class="stat-num">14</div><div class="stat-label">Categories</div></div>
+      <div class="stat"><div class="stat-num">3</div><div class="stat-label">Languages</div></div>
+      <div class="stat"><div class="stat-num">&infin;</div><div class="stat-label">Hosting Tasks</div></div>
+    </div>
+  </div>
+</section>
+
+<!-- TOOLS -->
+<section id="tools">
+  <div class="container">
+    <h2 class="reveal">14 categories of control</h2>
+    <p class="section-sub reveal">Every tool maps 1:1 to a cPanel UAPI or WHM API endpoint. No wrappers, no abstraction — direct hosting management.</p>
+    <div class="tools-grid reveal">
+      <div class="tool-card">
+        <span class="tool-icon">&#9993;</span>
+        <h3>Email</h3>
+        <p>Create accounts, forwarders, set quotas, list mailboxes</p>
+        <span class="tool-count">6 tools</span>
+      </div>
+      <div class="tool-card">
+        <span class="tool-icon">&#9741;</span>
+        <h3>DNS</h3>
+        <p>Add, delete, list records and zones across domains</p>
+        <span class="tool-count">4 tools</span>
+      </div>
+      <div class="tool-card">
+        <span class="tool-icon">&#8982;</span>
+        <h3>Domains</h3>
+        <p>List domains, add and remove subdomains</p>
+        <span class="tool-count">3 tools</span>
+      </div>
+      <div class="tool-card">
+        <span class="tool-icon">&#128194;</span>
+        <h3>Files</h3>
+        <p>List, read, write, and delete files on the server</p>
+        <span class="tool-count">4 tools</span>
+      </div>
+      <div class="tool-card">
+        <span class="tool-icon">&#9707;</span>
+        <h3>MySQL</h3>
+        <p>Create databases, manage users, set privileges</p>
+        <span class="tool-count">5 tools</span>
+      </div>
+      <div class="tool-card">
+        <span class="tool-icon">&#128274;</span>
+        <h3>SSL</h3>
+        <p>List certs, generate CSRs, install certificates</p>
+        <span class="tool-count">3 tools</span>
+      </div>
+      <div class="tool-card">
+        <span class="tool-icon">&#9200;</span>
+        <h3>Cron</h3>
+        <p>Add, list, and remove scheduled cron jobs</p>
+        <span class="tool-count">3 tools</span>
+      </div>
+      <div class="tool-card">
+        <span class="tool-icon">&#128230;</span>
+        <h3>Backups</h3>
+        <p>Create backups and list existing snapshots</p>
+        <span class="tool-count">2 tools</span>
+      </div>
+      <div class="tool-card">
+        <span class="tool-icon">&#8645;</span>
+        <h3>FTP</h3>
+        <p>Create, list, and delete FTP accounts</p>
+        <span class="tool-count">3 tools</span>
+      </div>
+      <div class="tool-card">
+        <span class="tool-icon">&#9881;</span>
+        <h3>PHP</h3>
+        <p>Get and set PHP version per domain</p>
+        <span class="tool-count">2 tools</span>
+      </div>
+      <div class="tool-card">
+        <span class="tool-icon">&#9729;</span>
+        <h3>WHM Accounts</h3>
+        <p>Create, suspend, terminate hosting accounts</p>
+        <span class="tool-count">5 tools</span>
+      </div>
+      <div class="tool-card">
+        <span class="tool-icon">&#9634;</span>
+        <h3>WHM Packages</h3>
+        <p>Create and list hosting packages</p>
+        <span class="tool-count">2 tools</span>
+      </div>
+      <div class="tool-card">
+        <span class="tool-icon">&#9850;</span>
+        <h3>WHM Services</h3>
+        <p>Check status, restart Apache, MySQL, and more</p>
+        <span class="tool-count">2 tools</span>
+      </div>
+      <div class="tool-card">
+        <span class="tool-icon">&#9783;</span>
+        <h3>WHM System</h3>
+        <p>Hostname, load average, server version info</p>
+        <span class="tool-count">3 tools</span>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- HOW IT WORKS -->
+<section id="how-it-works">
+  <div class="container">
+    <h2 class="reveal">How it works</h2>
+    <div class="flow reveal">
+      <div class="flow-step">
+        <div class="flow-num">01 &mdash; Connect</div>
+        <h3>Add to your AI client</h3>
+        <p>Point Claude Code, Cursor, or any MCP-compatible client to the cpanel-mcp server with your cPanel credentials.</p>
+        <div class="flow-arrow">&rarr;</div>
+      </div>
+      <div class="flow-step">
+        <div class="flow-num">02 &mdash; Ask</div>
+        <h3>Natural language commands</h3>
+        <p>"Create an email account for support@mydomain.com" or "Set up a cron job to run backups nightly."</p>
+        <div class="flow-arrow">&rarr;</div>
+      </div>
+      <div class="flow-step">
+        <div class="flow-num">03 &mdash; Execute</div>
+        <h3>Direct API calls</h3>
+        <p>The MCP server translates to cPanel UAPI calls, executes them, and returns structured results. No dashboard needed.</p>
+      </div>
+    </div>
+
+    <div class="terminal reveal">
+      <div class="terminal-bar">
+        <span class="terminal-dot"></span>
+        <span class="terminal-dot"></span>
+        <span class="terminal-dot"></span>
+        <span class="terminal-title">claude-code</span>
+      </div>
+      <div class="terminal-body">
+        <div><span class="prompt">you </span><span class="cmd">set up a catch-all email forwarder for mydomain.com</span></div>
+        <br>
+        <div><span class="output">&gt; Using </span><span class="highlight">cpanel_email_create_forwarder</span></div>
+        <div><span class="output">&gt; domain: mydomain.com</span></div>
+        <div><span class="output">&gt; type: catch-all → user@gmail.com</span></div>
+        <br>
+        <div><span class="prompt">&#10003; </span><span class="output">Catch-all forwarder created. All mail to *@mydomain.com</span></div>
+        <div><span class="output">&nbsp; will forward to user@gmail.com</span></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- CONFIG -->
+<section id="config">
+  <div class="container">
+    <h2 class="reveal">Drop-in configuration</h2>
+    <p class="section-sub reveal">Add the server to your MCP client config. Supports cPanel API tokens — no password needed.</p>
+    <div class="config-grid reveal">
+      <div class="config-block">
+        <div class="config-header"><span class="file-icon">&#128196;</span> .mcp.json</div>
+<pre class="config-code">{
+  <span class="key">"mcpServers"</span>: {
+    <span class="key">"cpanel"</span>: {
+      <span class="key">"command"</span>: <span class="str">"npx"</span>,
+      <span class="key">"args"</span>: [<span class="str">"cpanel-mcp"</span>],
+      <span class="key">"env"</span>: {
+        <span class="key">"CPANEL_HOST"</span>: <span class="str">"your-server.com"</span>,
+        <span class="key">"CPANEL_USERNAME"</span>: <span class="str">"your-user"</span>,
+        <span class="key">"CPANEL_API_TOKEN"</span>: <span class="str">"your-token"</span>
+      }
+    }
+  }
+}</pre>
+      </div>
+      <div class="config-block">
+        <div class="config-header"><span class="file-icon">&#128196;</span> Environment Variables</div>
+<pre class="config-code"><span class="comment"># Required</span>
+<span class="key">CPANEL_HOST</span>=<span class="str">server.web-hosting.com</span>
+<span class="key">CPANEL_USERNAME</span>=<span class="str">myuser</span>
+<span class="key">CPANEL_API_TOKEN</span>=<span class="str">ABCDEF123456</span>
+
+<span class="comment"># Optional</span>
+<span class="key">CPANEL_PORT</span>=<span class="str">2083</span>
+<span class="key">CPANEL_VERIFY_SSL</span>=<span class="str">true</span>
+<span class="key">CPANEL_TIMEOUT</span>=<span class="str">30000</span></pre>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- FOOTER -->
+<footer>
+  <div class="container">
+    <div class="footer-left">MIT License &middot; Built by <a href="https://github.com/ExpertVagabond">ExpertVagabond</a></div>
+    <div class="footer-links">
+      <a href="https://github.com/ExpertVagabond/cpanel-mcp">GitHub</a>
+      <a href="https://www.npmjs.com/package/cpanel-mcp">npm</a>
+      <a href="https://modelcontextprotocol.io">MCP Spec</a>
+    </div>
+  </div>
+</footer>
+
+<script>
+function copyCmd(btn,text){
+  navigator.clipboard.writeText(text).then(()=>{
+    btn.textContent='copied!';btn.classList.add('copied');
+    setTimeout(()=>{btn.textContent='copy';btn.classList.remove('copied')},1800);
+  });
+}
+
+// Scroll reveal
+const obs=new IntersectionObserver((entries)=>{
+  entries.forEach(e=>{if(e.isIntersecting){e.target.classList.add('visible');obs.unobserve(e.target)}});
+},{threshold:0.1});
+document.querySelectorAll('.reveal').forEach(el=>obs.observe(el));
+</script>
+</body>
+</html>
