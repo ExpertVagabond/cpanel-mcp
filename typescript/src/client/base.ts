@@ -1,5 +1,10 @@
 import { config } from "../config.js";
 
+// Disable TLS verification globally if configured (for self-signed certs)
+if (!config.verifySsl) {
+  process.env.NODE_TLS_REJECT_UNAUTHORIZED = "0";
+}
+
 export class CpanelApiError extends Error {
   constructor(
     public status: number,
@@ -39,10 +44,6 @@ export async function request<T>(
         Accept: "application/json",
       },
       signal: controller.signal,
-      // @ts-expect-error Node 18+ undici option for self-signed certs
-      dispatcher: config.verifySsl
-        ? undefined
-        : new (await import("node:https")).Agent({ rejectUnauthorized: false }),
     });
 
     if (!res.ok) {
