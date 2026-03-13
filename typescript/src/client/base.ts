@@ -1,9 +1,11 @@
 import { config } from "../config.js";
+import https from "node:https";
 
-// Disable TLS verification globally if configured (for self-signed certs)
-if (!config.verifySsl) {
-  process.env.NODE_TLS_REJECT_UNAUTHORIZED = "0";
-}
+// Create a custom HTTPS agent for cPanel requests when SSL verification is disabled
+// This scopes the TLS bypass to only cPanel API calls instead of the entire process
+export const cpanelAgent = !config.verifySsl
+  ? new https.Agent({ rejectUnauthorized: false })
+  : undefined;
 
 export class CpanelApiError extends Error {
   constructor(
@@ -38,13 +40,18 @@ export async function request<T>(
   const timer = setTimeout(() => controller.abort(), config.timeout);
 
   try {
-    const res = await fetch(url.toString(), {
+    const fetchOptions: RequestInit & { dispatcher?: unknown } = {
       headers: {
         Authorization: `${authPrefix} ${authUser}:${config.token}`,
         Accept: "application/json",
       },
       signal: controller.signal,
-    });
+    };
+    // Use scoped agent for TLS bypass instead of global process setting
+    if (cpanelAgent) {
+      (fetchOptions as Record<string, unknown>).dispatcher = cpanelAgent;
+    }
+    const res = await fetch(url.toString(), fetchOptions);
 
     if (!res.ok) {
       const body = await res.text().catch(() => "");
