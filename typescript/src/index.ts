@@ -265,6 +265,11 @@ async function main() {
 }
 
 main().catch((e) => {
-  console.error("Fatal:", e);
+  // Security: never log raw error which may contain credentials
+  const message = e instanceof Error ? e.message : "Unknown error";
+  const safeMessage = message
+    .replace(/[\x00-\x1f\x7f]/g, "")
+    .slice(0, 500);
+  console.error("Fatal:", safeMessage);
   process.exit(1);
 });
