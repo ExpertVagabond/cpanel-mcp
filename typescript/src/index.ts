@@ -8,6 +8,7 @@ import {
 import type { McpAction } from "./types.js";
 import { errorResult } from "./types.js";
 import { validateConfig } from "./config.js";
+import { sanitizeToolError } from "./validators.js";
 
 // Email tools
 import { emailListAccounts } from "./tools/email/list-accounts.js";
@@ -178,7 +179,7 @@ function createServer() {
     try {
       return await handler(request);
     } catch (e) {
-      return errorResult(e instanceof Error ? e.message : String(e));
+      return errorResult(sanitizeToolError(e));
     }
   });
 

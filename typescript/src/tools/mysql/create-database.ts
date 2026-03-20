@@ -3,9 +3,10 @@ import { zodToJsonSchema } from "zod-to-json-schema";
 import type { McpAction, ToolInputSchema } from "../../types.js";
 import { textResult, errorResult } from "../../types.js";
 import { uapi } from "../../client/uapi.js";
+import { databaseNameSchema, sanitizeToolError } from "../../validators.js";
 
 const schema = z.object({
-  name: z.string().describe("Database name (will be prefixed with cPanel username)"),
+  name: databaseNameSchema.describe("Database name (will be prefixed with cPanel username)"),
 });
 
 export const mysqlCreateDatabase: McpAction = {
@@ -15,12 +16,12 @@ export const mysqlCreateDatabase: McpAction = {
     inputSchema: zodToJsonSchema(schema) as ToolInputSchema,
   },
   handler: async (request) => {
-    const { name } = schema.parse(request.params.arguments);
     try {
+      const { name } = schema.parse(request.params.arguments);
       const data = await uapi("Mysql", "create_database", { name });
       return textResult(data);
     } catch (e) {
-      return errorResult(e instanceof Error ? e.message : String(e));
+      return errorResult(sanitizeToolError(e));
     }
   },
 };

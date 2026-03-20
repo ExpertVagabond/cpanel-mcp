@@ -3,6 +3,7 @@ import { zodToJsonSchema } from "zod-to-json-schema";
 import type { McpAction, ToolInputSchema } from "../../../types.js";
 import { textResult, errorResult } from "../../../types.js";
 import { whm } from "../../../client/whm.js";
+import { sanitizeToolError } from "../../../validators.js";
 
 const schema = z.object({});
 
@@ -17,7 +18,7 @@ export const whmGetHostname: McpAction = {
       const data = await whm("gethostname");
       return textResult(data);
     } catch (e) {
-      return errorResult(e instanceof Error ? e.message : String(e));
+      return errorResult(sanitizeToolError(e));
     }
   },
 };

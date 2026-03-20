@@ -3,14 +3,15 @@ import { zodToJsonSchema } from "zod-to-json-schema";
 import type { McpAction, ToolInputSchema } from "../../types.js";
 import { textResult, errorResult } from "../../types.js";
 import { uapi } from "../../client/uapi.js";
+import { domainSchema, dnsRecordNameSchema, ttlSchema, numericStringSchema, sanitizeToolError } from "../../validators.js";
 
 const schema = z.object({
-  domain: z.string().describe("Domain zone to add the record to"),
-  name: z.string().describe("Record name (e.g., subdomain.example.com.)"),
+  domain: domainSchema.describe("Domain zone to add the record to"),
+  name: dnsRecordNameSchema.describe("Record name (e.g., subdomain.example.com.)"),
   type: z.enum(["A", "AAAA", "CNAME", "MX", "TXT", "SRV", "CAA"]).describe("DNS record type"),
-  data: z.string().describe("Record value/data"),
-  ttl: z.string().optional().describe("Time to live in seconds (default: 14400)"),
-  priority: z.string().optional().describe("Priority (required for MX and SRV records)"),
+  data: z.string().min(1, "Record data is required").max(4096, "Record data exceeds maximum length").describe("Record value/data"),
+  ttl: ttlSchema.optional().describe("Time to live in seconds (default: 14400)"),
+  priority: numericStringSchema("Priority").optional().describe("Priority (required for MX and SRV records)"),
 });
 
 export const dnsAddRecord: McpAction = {
@@ -20,8 +21,12 @@ export const dnsAddRecord: McpAction = {
     inputSchema: zodToJsonSchema(schema) as ToolInputSchema,
   },
   handler: async (request) => {
-    const { domain, name, type, data: rdata, ttl, priority } = schema.parse(request.params.arguments);
     try {
+      const { domain, name, type, data: rdata, ttl, priority } = schema.parse(request.params.arguments);
+      // Require priority for MX and SRV records
+      if ((type === "MX" || type === "SRV") && !priority) {
+        return errorResult(`Priority is required for ${type} records`);
+      }
       const serial = Date.now().toString();
       const params: Record<string, string> = {
         domain,
@@ -35,7 +40,7 @@ export const dnsAddRecord: McpAction = {
       const result = await uapi("DNS", "mass_edit_zone", params);
       return textResult(result);
     } catch (e) {
-      return errorResult(e instanceof Error ? e.message : String(e));
+      return errorResult(sanitizeToolError(e));
     }
   },
 };

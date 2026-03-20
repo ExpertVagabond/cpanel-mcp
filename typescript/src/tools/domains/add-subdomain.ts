@@ -3,11 +3,12 @@ import { zodToJsonSchema } from "zod-to-json-schema";
 import type { McpAction, ToolInputSchema } from "../../types.js";
 import { textResult, errorResult } from "../../types.js";
 import { uapi } from "../../client/uapi.js";
+import { subdomainLabelSchema, domainSchema, safePathSchema, sanitizeToolError } from "../../validators.js";
 
 const schema = z.object({
-  domain: z.string().describe("Subdomain name (e.g., 'blog' for blog.example.com)"),
-  rootdomain: z.string().describe("Root domain (e.g., example.com)"),
-  dir: z.string().optional().describe("Document root directory (auto-generated if omitted)"),
+  domain: subdomainLabelSchema.describe("Subdomain name (e.g., 'blog' for blog.example.com)"),
+  rootdomain: domainSchema.describe("Root domain (e.g., example.com)"),
+  dir: safePathSchema.optional().describe("Document root directory (auto-generated if omitted)"),
 });
 
 export const domainsAddSubdomain: McpAction = {
@@ -17,14 +18,14 @@ export const domainsAddSubdomain: McpAction = {
     inputSchema: zodToJsonSchema(schema) as ToolInputSchema,
   },
   handler: async (request) => {
-    const { domain, rootdomain, dir } = schema.parse(request.params.arguments);
     try {
+      const { domain, rootdomain, dir } = schema.parse(request.params.arguments);
       const params: Record<string, string> = { domain, rootdomain };
       if (dir) params.dir = dir;
       const data = await uapi("SubDomain", "addsubdomain", params);
       return textResult(data);
     } catch (e) {
-      return errorResult(e instanceof Error ? e.message : String(e));
+      return errorResult(sanitizeToolError(e));
     }
   },
 };

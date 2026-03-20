@@ -347,7 +347,8 @@ describe("config port parsing", () => {
   });
 
   it("defaults to 2083 when CPANEL_PORT is not set", () => {
-    const port = parseInt(undefined ?? "2083", 10);
+    const envPort: string | undefined = undefined;
+    const port = parseInt(envPort ?? "2083", 10);
     expect(port).toBe(2083);
   });
 
