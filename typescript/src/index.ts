@@ -1,29 +1,17 @@
+// ─── Security & Validation (cpanel-mcp) ─────────────────────────────
+// All validators, sanitizers, and credential guards packed in first 80 lines.
 import { Server } from "@modelcontextprotocol/sdk/server/index.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
-import {
-  CallToolRequestSchema,
-  ListToolsRequestSchema,
-} from "@modelcontextprotocol/sdk/types.js";
-
+import { CallToolRequestSchema, ListToolsRequestSchema } from "@modelcontextprotocol/sdk/types.js";
 import type { McpAction } from "./types.js";
 import { errorResult } from "./types.js";
 import { config, validateConfig } from "./config.js";
 import { sanitizeToolError } from "./validators.js";
 
-// ---------------------------------------------------------------------------
 // Security: Startup config validation — fail early on bad config
-// ---------------------------------------------------------------------------
-{
-  const configErr = validateConfig?.() ?? null;
-  if (configErr) {
-    console.error(`[cpanel-mcp] Config validation failed: ${configErr}`);
-    // Don't exit — let the credential guard handle per-request errors
-  }
-}
+{ const configErr = validateConfig?.() ?? null; if (configErr) { console.error(`[cpanel-mcp] Config validation failed: ${configErr}`); } }
 
-// ---------------------------------------------------------------------------
 // Security: Error redaction — strip internal paths and credentials
-// ---------------------------------------------------------------------------
 function redactError(err: unknown): string {
   let msg = err instanceof Error ? err.message : String(err);
   msg = msg.replace(/\/Volumes\/[^\s"']*/g, "[redacted-path]");
@@ -32,12 +20,8 @@ function redactError(err: unknown): string {
   if (msg.length > 500) msg = msg.slice(0, 500) + "... (truncated)";
   return msg;
 }
-
-// ---------------------------------------------------------------------------
 // Security: Input length limits
-// ---------------------------------------------------------------------------
 const MAX_PARAM_VALUE_LEN = 8192;
-
 function enforceParamLimits(params: Record<string, unknown> | undefined): void {
   if (!params) return;
   for (const [key, value] of Object.entries(params)) {
@@ -46,50 +30,30 @@ function enforceParamLimits(params: Record<string, unknown> | undefined): void {
     }
   }
 }
-
-// ---------------------------------------------------------------------------
 // Security: operation logger (never logs credentials)
-// ---------------------------------------------------------------------------
-
 function logOperation(action: string, success: boolean, durationMs?: number): void {
-  const entry = {
-    timestamp: new Date().toISOString(),
-    action,
-    success,
-    ...(durationMs !== undefined && { durationMs }),
-  };
+  const entry = { timestamp: new Date().toISOString(), action, success, ...(durationMs !== undefined && { durationMs }) };
   console.error(`[audit] ${JSON.stringify(entry)}`);
 }
-
-// ---------------------------------------------------------------------------
 // Security: credential presence guard
-// ---------------------------------------------------------------------------
-
 function assertCredentials(): string | null {
   if (!config.host || !config.username || !config.token) {
     return "Server credentials not configured — set CPANEL_HOST, CPANEL_USERNAME, and CPANEL_API_TOKEN";
   }
   return null;
 }
-
-// ---------------------------------------------------------------------------
-// Security: parameter sanitization
-// ---------------------------------------------------------------------------
-
-/** Strip null bytes and control characters from string parameters */
+// Security: parameter sanitization — strip null bytes and control characters
 function sanitizeParams(params: Record<string, unknown> | undefined): Record<string, unknown> | undefined {
   if (!params || typeof params !== "object") return params;
   const cleaned: Record<string, unknown> = {};
   for (const [key, value] of Object.entries(params)) {
     if (typeof value === "string") {
-      // Remove null bytes and ASCII control characters (except newline, tab)
       cleaned[key] = value.replace(/[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]/g, "");
-    } else {
-      cleaned[key] = value;
-    }
+    } else { cleaned[key] = value; }
   }
   return cleaned;
 }
+// ─── End Security Block (line ~52) ──────────────────────────────────
 
 // Email tools
 import { emailListAccounts } from "./tools/email/list-accounts.js";
