@@ -9,6 +9,8 @@ import (
 	"log"
 	"net/http"
 	"net/url"
+	"os"
+	"regexp"
 	"strings"
 	"time"
 
@@ -27,6 +29,29 @@ type CpanelApiError struct {
 
 func (e *CpanelApiError) Error() string {
 	return fmt.Sprintf("cPanel API %d: %s", e.Status, e.Message)
+}
+
+// maxResponseBody limits the amount of data read from cPanel API responses
+// to prevent memory exhaustion from oversized or malicious responses.
+const maxResponseBody = 10 * 1024 * 1024 // 10 MB
+
+// redactErrorBody strips credential-like patterns from HTTP error response
+// bodies so they are never surfaced to clients.
+func redactErrorBody(body string) string {
+	if len(body) > 500 {
+		body = body[:500] + "...[truncated]"
+	}
+	// Redact auth header patterns
+	body = regexp.MustCompile(`(?i)(cpanel|whm)\s+\S+:\S+`).ReplaceAllString(body, "[redacted-auth]")
+	// Redact long token-like strings
+	body = regexp.MustCompile(`[A-Za-z0-9_-]{32,}`).ReplaceAllString(body, "[redacted-token]")
+	// Redact any env var values that may appear
+	for _, envKey := range []string{"CPANEL_API_TOKEN", "CPANEL_WHM_PASSWORD"} {
+		if val := os.Getenv(envKey); val != "" && len(val) > 3 {
+			body = strings.ReplaceAll(body, val, "[REDACTED]")
+		}
+	}
+	return body
 }
 
 func New(cfg *config.CpanelConfig) *CpanelClient {
@@ -119,13 +144,13 @@ func (c *CpanelClient) Request(ctx context.Context, apiType, path string, params
 	}
 	defer resp.Body.Close()
 
-	body, err := io.ReadAll(resp.Body)
+	body, err := io.ReadAll(io.LimitReader(resp.Body, maxResponseBody))
 	if err != nil {
 		return nil, err
 	}
 
 	if resp.StatusCode >= 400 {
-		return nil, &CpanelApiError{Status: resp.StatusCode, Message: string(body)}
+		return nil, &CpanelApiError{Status: resp.StatusCode, Message: redactErrorBody(string(body))}
 	}
 
 	return json.RawMessage(body), nil
