@@ -11,6 +11,43 @@ import { config, validateConfig } from "./config.js";
 import { sanitizeToolError } from "./validators.js";
 
 // ---------------------------------------------------------------------------
+// Security: Startup config validation — fail early on bad config
+// ---------------------------------------------------------------------------
+{
+  const configErr = validateConfig?.() ?? null;
+  if (configErr) {
+    console.error(`[cpanel-mcp] Config validation failed: ${configErr}`);
+    // Don't exit — let the credential guard handle per-request errors
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Security: Error redaction — strip internal paths and credentials
+// ---------------------------------------------------------------------------
+function redactError(err: unknown): string {
+  let msg = err instanceof Error ? err.message : String(err);
+  msg = msg.replace(/\/Volumes\/[^\s"']*/g, "[redacted-path]");
+  msg = msg.replace(/\/Users\/[^\s"']*/g, "[redacted-path]");
+  msg = msg.replace(/token[=:]\s*\S+/gi, "token=[REDACTED]");
+  if (msg.length > 500) msg = msg.slice(0, 500) + "... (truncated)";
+  return msg;
+}
+
+// ---------------------------------------------------------------------------
+// Security: Input length limits
+// ---------------------------------------------------------------------------
+const MAX_PARAM_VALUE_LEN = 8192;
+
+function enforceParamLimits(params: Record<string, unknown> | undefined): void {
+  if (!params) return;
+  for (const [key, value] of Object.entries(params)) {
+    if (typeof value === "string" && value.length > MAX_PARAM_VALUE_LEN) {
+      throw new Error(`Parameter "${key}" exceeds maximum length of ${MAX_PARAM_VALUE_LEN}`);
+    }
+  }
+}
+
+// ---------------------------------------------------------------------------
 // Security: operation logger (never logs credentials)
 // ---------------------------------------------------------------------------
 
@@ -241,6 +278,8 @@ function createServer() {
       request.params.arguments = sanitizeParams(
         request.params.arguments as Record<string, unknown>,
       ) as typeof request.params.arguments;
+      // Security: enforce parameter value length limits
+      enforceParamLimits(request.params.arguments as Record<string, unknown>);
     }
 
     try {
@@ -249,7 +288,7 @@ function createServer() {
       return result;
     } catch (e) {
       logOperation(toolName, false, Date.now() - start);
-      return errorResult(sanitizeToolError(e));
+      return errorResult(redactError(e));
     }
   });
 
