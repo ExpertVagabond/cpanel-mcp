@@ -8,8 +8,8 @@ import { errorResult } from "./types.js";
 import { config, validateConfig } from "./config.js";
 import { sanitizeToolError } from "./validators.js";
 
-// Security: Startup config validation — fail early on bad config
-{ const configErr = validateConfig?.() ?? null; if (configErr) { console.error(`[cpanel-mcp] Config validation failed: ${configErr}`); } }
+// Security: Startup config validation — warn on bad config (tools will check credentials per-call)
+{ const configErr = validateConfig?.() ?? null; if (configErr) { console.error(`[cpanel-mcp] Config warning: ${configErr} — tools will require credentials before executing`); } }
 
 // Security: Error redaction — strip internal paths and credentials
 function redactError(err: unknown): string {
@@ -53,7 +53,17 @@ function sanitizeParams(params: Record<string, unknown> | undefined): Record<str
   }
   return cleaned;
 }
-// ─── End Security Block (line ~52) ──────────────────────────────────
+// Security: rate limiter — sliding window, 60 calls per minute
+const _rateBuckets: number[] = [];
+const RATE_WINDOW_MS = 60_000;
+const RATE_MAX_CALLS = 60;
+function checkRateLimit(): void {
+  const now = Date.now();
+  while (_rateBuckets.length > 0 && now - _rateBuckets[0] > RATE_WINDOW_MS) _rateBuckets.shift();
+  if (_rateBuckets.length >= RATE_MAX_CALLS) throw new Error("Rate limit exceeded — max 60 calls per minute");
+  _rateBuckets.push(now);
+}
+// ─── End Security Block (line ~66) ──────────────────────────────────
 
 // Email tools
 import { emailListAccounts } from "./tools/email/list-accounts.js";
@@ -221,6 +231,12 @@ function createServer() {
   server.setRequestHandler(CallToolRequestSchema, async (request) => {
     const start = Date.now();
     const toolName = request.params.name;
+
+    // Security: enforce rate limiting
+    try { checkRateLimit(); } catch (e) {
+      logOperation(toolName, false);
+      return errorResult(e instanceof Error ? e.message : "Rate limit exceeded");
+    }
 
     // Security: validate credentials are present before any operation
     const credError = assertCredentials();
