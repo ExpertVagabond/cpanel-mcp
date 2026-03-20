@@ -3,9 +3,10 @@ import { zodToJsonSchema } from "zod-to-json-schema";
 import type { McpAction, ToolInputSchema } from "../../types.js";
 import { textResult, errorResult } from "../../types.js";
 import { uapi } from "../../client/uapi.js";
+import { safePathSchema, sanitizeToolError } from "../../validators.js";
 
 const schema = z.object({
-  path: z.string().describe("Full path to the file or directory to delete"),
+  path: safePathSchema.describe("Full path to the file or directory to delete"),
 });
 
 export const filesDelete: McpAction = {
@@ -15,12 +16,12 @@ export const filesDelete: McpAction = {
     inputSchema: zodToJsonSchema(schema) as ToolInputSchema,
   },
   handler: async (request) => {
-    const { path } = schema.parse(request.params.arguments);
     try {
+      const { path } = schema.parse(request.params.arguments);
       const data = await uapi("Fileman", "fileop", { op: "unlink", sourcefiles: path });
       return textResult(data);
     } catch (e) {
-      return errorResult(e instanceof Error ? e.message : String(e));
+      return errorResult(sanitizeToolError(e));
     }
   },
 };

@@ -3,6 +3,7 @@ import { zodToJsonSchema } from "zod-to-json-schema";
 import type { McpAction, ToolInputSchema } from "../../types.js";
 import { textResult, errorResult } from "../../types.js";
 import { uapi } from "../../client/uapi.js";
+import { sanitizeToolError } from "../../validators.js";
 
 const schema = z.object({});
 
@@ -17,7 +18,7 @@ export const ftpListAccounts: McpAction = {
       const data = await uapi("Ftp", "list_ftp_with_disk");
       return textResult(data);
     } catch (e) {
-      return errorResult(e instanceof Error ? e.message : String(e));
+      return errorResult(sanitizeToolError(e));
     }
   },
 };

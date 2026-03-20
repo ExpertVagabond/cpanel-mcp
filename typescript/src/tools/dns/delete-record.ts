@@ -3,10 +3,11 @@ import { zodToJsonSchema } from "zod-to-json-schema";
 import type { McpAction, ToolInputSchema } from "../../types.js";
 import { textResult, errorResult } from "../../types.js";
 import { uapi } from "../../client/uapi.js";
+import { domainSchema, dnsLineSchema, sanitizeToolError } from "../../validators.js";
 
 const schema = z.object({
-  domain: z.string().describe("Domain zone containing the record"),
-  line: z.string().describe("Line number of the record to delete (from cpanel_dns_get_records)"),
+  domain: domainSchema.describe("Domain zone containing the record"),
+  line: dnsLineSchema.describe("Line number of the record to delete (from cpanel_dns_get_records)"),
 });
 
 export const dnsDeleteRecord: McpAction = {
@@ -16,8 +17,8 @@ export const dnsDeleteRecord: McpAction = {
     inputSchema: zodToJsonSchema(schema) as ToolInputSchema,
   },
   handler: async (request) => {
-    const { domain, line } = schema.parse(request.params.arguments);
     try {
+      const { domain, line } = schema.parse(request.params.arguments);
       const serial = Date.now().toString();
       const data = await uapi("DNS", "mass_edit_zone", {
         domain,
@@ -26,7 +27,7 @@ export const dnsDeleteRecord: McpAction = {
       });
       return textResult(data);
     } catch (e) {
-      return errorResult(e instanceof Error ? e.message : String(e));
+      return errorResult(sanitizeToolError(e));
     }
   },
 };

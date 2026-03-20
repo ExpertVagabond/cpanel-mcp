@@ -3,9 +3,10 @@ import { zodToJsonSchema } from "zod-to-json-schema";
 import type { McpAction, ToolInputSchema } from "../../types.js";
 import { textResult, errorResult } from "../../types.js";
 import { uapi } from "../../client/uapi.js";
+import { sanitizeToolError } from "../../validators.js";
 
 const schema = z.object({
-  linekey: z.string().describe("Cron job line key (from cpanel_cron_list_jobs)"),
+  linekey: z.string().min(1, "Line key is required").max(512, "Line key is too long").describe("Cron job line key (from cpanel_cron_list_jobs)"),
 });
 
 export const cronRemoveJob: McpAction = {
@@ -15,12 +16,12 @@ export const cronRemoveJob: McpAction = {
     inputSchema: zodToJsonSchema(schema) as ToolInputSchema,
   },
   handler: async (request) => {
-    const { linekey } = schema.parse(request.params.arguments);
     try {
+      const { linekey } = schema.parse(request.params.arguments);
       const data = await uapi("CronJob", "remove_line", { linekey });
       return textResult(data);
     } catch (e) {
-      return errorResult(e instanceof Error ? e.message : String(e));
+      return errorResult(sanitizeToolError(e));
     }
   },
 };
