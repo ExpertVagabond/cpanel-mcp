@@ -266,9 +266,17 @@ async function main() {
 
 main().catch((e) => {
   // Security: never log raw error which may contain credentials
-  const message = e instanceof Error ? e.message : "Unknown error";
+  let message = e instanceof Error ? e.message : "Unknown error";
+  // Redact any credential env var values from the error message
+  for (const envKey of ["CPANEL_API_TOKEN", "CPANEL_WHM_PASSWORD"]) {
+    const val = process.env[envKey];
+    if (val && val.length > 3) {
+      message = message.replaceAll(val, "[REDACTED]");
+    }
+  }
   const safeMessage = message
     .replace(/[\x00-\x1f\x7f]/g, "")
+    .replace(/[A-Za-z0-9_-]{32,}/g, "[redacted-token]")
     .slice(0, 500);
   console.error("Fatal:", safeMessage);
   process.exit(1);

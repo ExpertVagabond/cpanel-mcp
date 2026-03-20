@@ -230,6 +230,18 @@ func validateCronField(name, val string) error {
 	return nil
 }
 
+// dangerousCronPatterns blocks obvious shell injection patterns in cron commands.
+var dangerousCronPatterns = []*regexp.Regexp{
+	regexp.MustCompile(`\$\(.*\)`),                        // Command substitution $(...)
+	regexp.MustCompile("`[^`]+`"),                          // Backtick command substitution
+	regexp.MustCompile(`\|\s*(bash|sh|zsh|dash|ksh|csh)\b`), // Piping to shells
+	regexp.MustCompile(`;\s*(rm|chmod|chown|dd|mkfs|fdisk)\s+-rf?\s+/`), // Destructive cmds on root
+	regexp.MustCompile(`>\s*/etc/`),                        // Writing to /etc
+	regexp.MustCompile(`>\s*/dev/`),                        // Writing to devices
+	regexp.MustCompile(`\beval\b`),                         // eval
+	regexp.MustCompile(`\bexec\b.*<`),                      // exec with redirection
+}
+
 func validateCronCommand(val string) error {
 	if val == "" {
 		return fmt.Errorf("command is required")
@@ -239,6 +251,11 @@ func validateCronCommand(val string) error {
 	}
 	if strings.Contains(val, "\x00") {
 		return fmt.Errorf("command must not contain null bytes")
+	}
+	for _, pattern := range dangerousCronPatterns {
+		if pattern.MatchString(val) {
+			return fmt.Errorf("command contains potentially dangerous patterns — review the command and ensure it is safe")
+		}
 	}
 	return nil
 }
@@ -287,6 +304,44 @@ func validatePackageName(val string) error {
 func validatePHPVersion(val string) error {
 	if !phpVersionRe.MatchString(val) {
 		return fmt.Errorf("PHP version must match format ea-phpNN (e.g., ea-php81)")
+	}
+	return nil
+}
+
+// validPrivileges is the allowlist of MySQL privileges accepted by the set_privileges tool.
+var validPrivileges = map[string]bool{
+	"ALL PRIVILEGES":          true,
+	"ALL":                     true,
+	"SELECT":                  true,
+	"INSERT":                  true,
+	"UPDATE":                  true,
+	"DELETE":                  true,
+	"CREATE":                  true,
+	"DROP":                    true,
+	"ALTER":                   true,
+	"INDEX":                   true,
+	"CREATE TEMPORARY TABLES": true,
+	"LOCK TABLES":             true,
+	"REFERENCES":              true,
+	"CREATE VIEW":             true,
+	"SHOW VIEW":               true,
+	"CREATE ROUTINE":          true,
+	"ALTER ROUTINE":           true,
+	"EXECUTE":                 true,
+	"EVENT":                   true,
+	"TRIGGER":                 true,
+}
+
+func validatePrivileges(val string) error {
+	if val == "" {
+		return fmt.Errorf("privileges are required")
+	}
+	parts := strings.Split(val, ",")
+	for _, p := range parts {
+		trimmed := strings.TrimSpace(strings.ToUpper(p))
+		if !validPrivileges[trimmed] {
+			return fmt.Errorf("invalid privilege %q — allowed: ALL PRIVILEGES, SELECT, INSERT, UPDATE, DELETE, CREATE, DROP, ALTER, INDEX, CREATE TEMPORARY TABLES, LOCK TABLES, REFERENCES, CREATE VIEW, SHOW VIEW, CREATE ROUTINE, ALTER ROUTINE, EXECUTE, EVENT, TRIGGER", p)
+		}
 	}
 	return nil
 }
@@ -667,7 +722,7 @@ func registerMysqlTools(s *server.MCPServer, c *client.CpanelClient) {
 				return validationError(err.Error()), nil
 			}
 			privileges := strArg(req.Params.Arguments, "privileges")
-			if err := validateRequired("privileges", privileges); err != nil {
+			if err := validatePrivileges(privileges); err != nil {
 				return validationError(err.Error()), nil
 			}
 			data, err := c.UAPI(ctx, "Mysql", "set_privileges_on_database", map[string]string{"user": user, "database": database, "privileges": privileges})
@@ -1051,6 +1106,11 @@ func registerWHMTools(s *server.MCPServer, c *client.CpanelClient) {
 				if len(s) > 253 {
 					return validationError("search value exceeds maximum length"), nil
 				}
+				// Block characters that could be used for injection
+				searchSafe := regexp.MustCompile(`^[a-zA-Z0-9._@:/-]*$`)
+				if !searchSafe.MatchString(s) {
+					return validationError("search value contains invalid characters"), nil
+				}
 				params["search"] = s
 			}
 			data, err := c.WHM(ctx, "listaccts", params)
@@ -1116,8 +1176,8 @@ func registerWHMTools(s *server.MCPServer, c *client.CpanelClient) {
 			}
 			params := map[string]string{"user": user}
 			if r := strArg(req.Params.Arguments, "reason"); r != "" {
-				if len(r) > 512 {
-					return validationError("reason exceeds maximum length"), nil
+				if err := validateSafeText("reason", r, 512); err != nil {
+					return validationError(err.Error()), nil
 				}
 				params["reason"] = r
 			}
