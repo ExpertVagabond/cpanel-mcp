@@ -17,6 +17,17 @@ import (
 	"github.com/ExpertVagabond/cpanel-mcp/internal/config"
 )
 
+// ── Security Constants ──────────────────────────────────────────────────
+
+// maxPathLength limits the API path length to prevent oversized URLs.
+const maxPathLength = 2048
+
+// maxParamValueLength limits individual query parameter values.
+const maxParamValueLength = 4096
+
+// requestTimeout is the hard upper limit for any cPanel API call.
+const requestTimeout = 60 // seconds
+
 type CpanelClient struct {
 	cfg    *config.CpanelConfig
 	client *http.Client
@@ -28,7 +39,7 @@ type CpanelApiError struct {
 }
 
 func (e *CpanelApiError) Error() string {
-	return fmt.Sprintf("cPanel API %d: %s", e.Status, e.Message)
+	return fmt.Sprintf("cPanel API %d: %s", e.Status, redactErrorBody(e.Message))
 }
 
 // maxResponseBody limits the amount of data read from cPanel API responses
@@ -99,6 +110,20 @@ func sanitizeAuthComponent(name, value string) (string, error) {
 }
 
 func (c *CpanelClient) Request(ctx context.Context, apiType, path string, params map[string]string) (json.RawMessage, error) {
+	// Validate path length and characters
+	if len(path) > maxPathLength {
+		return nil, fmt.Errorf("API path exceeds maximum length (%d > %d)", len(path), maxPathLength)
+	}
+	if strings.ContainsAny(path, "\x00\r\n") {
+		return nil, fmt.Errorf("API path contains invalid characters")
+	}
+	// Validate param values
+	for k, v := range params {
+		if len(v) > maxParamValueLength {
+			return nil, fmt.Errorf("parameter %q value exceeds max length (%d > %d)", k, len(v), maxParamValueLength)
+		}
+	}
+
 	port := c.cfg.Port
 	authPrefix := "cpanel"
 	authUser := c.cfg.Username
