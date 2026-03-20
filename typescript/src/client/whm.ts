@@ -22,7 +22,7 @@ export async function whm<T = unknown>(
   );
 
   if (raw.metadata.result !== 1) {
-    throw new CpanelApiError(0, raw.metadata.reason || "Unknown WHM error", raw);
+    throw new CpanelApiError(0, raw.metadata.reason || "Unknown WHM error");
   }
 
   return raw.data;
