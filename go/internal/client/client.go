@@ -138,9 +138,21 @@ func (c *CpanelClient) Request(ctx context.Context, apiType, path string, params
 	req.Header.Set("Authorization", fmt.Sprintf("%s %s:%s", authPrefix, cleanUser, cleanToken))
 	req.Header.Set("Accept", "application/json")
 
+	// Security: verify constructed URL still points to the intended host
+	// (prevents host-override via crafted path or param values)
+	if u.Hostname() != c.cfg.Host {
+		return nil, fmt.Errorf("URL hostname mismatch — possible injection in path or params")
+	}
+
 	resp, err := c.client.Do(req)
 	if err != nil {
-		return nil, err
+		// Security: network errors may contain the URL with auth tokens — redact them
+		errMsg := err.Error()
+		if c.cfg.Token != "" {
+			errMsg = strings.ReplaceAll(errMsg, c.cfg.Token, "[REDACTED]")
+		}
+		errMsg = strings.ReplaceAll(errMsg, fmt.Sprintf("%s:%d", c.cfg.Host, port), "[host]")
+		return nil, &CpanelApiError{Status: 0, Message: fmt.Sprintf("Network error: %s", redactErrorBody(errMsg))}
 	}
 	defer resp.Body.Close()
 

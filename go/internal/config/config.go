@@ -8,6 +8,19 @@ import (
 	"strings"
 )
 
+// blockedCIDRs contains private/link-local/loopback ranges to prevent SSRF.
+var blockedCIDRs = []string{
+	"127.0.0.0/8",
+	"10.0.0.0/8",
+	"172.16.0.0/12",
+	"192.168.0.0/16",
+	"169.254.0.0/16",
+	"0.0.0.0/8",
+	"::1/128",
+	"fc00::/7",
+	"fe80::/10",
+}
+
 type CpanelConfig struct {
 	Host       string
 	Username   string
@@ -20,15 +33,43 @@ type CpanelConfig struct {
 }
 
 // validateHostname checks that the host is a valid hostname or IP address.
-// Rejects empty strings, strings with whitespace, and strings with path/query components.
+// Rejects empty strings, strings with whitespace, path/query components,
+// embedded credentials, localhost, private/link-local IPs, and cloud
+// metadata endpoints to prevent SSRF attacks.
 func validateHostname(host string) error {
-	if strings.ContainsAny(host, " \t\n\r/\\?#@") {
-		return fmt.Errorf("CPANEL_HOST contains invalid characters (whitespace, path, or query components)")
+	if host == "" {
+		return fmt.Errorf("CPANEL_HOST is required")
 	}
-	// Must be a valid IP or hostname with at least one dot (or localhost)
-	if net.ParseIP(host) != nil {
+	if strings.ContainsAny(host, " \t\n\r/\\?#@") {
+		return fmt.Errorf("CPANEL_HOST contains invalid characters (whitespace, path, query, or credentials)")
+	}
+
+	lower := strings.ToLower(host)
+
+	// Block localhost and loopback
+	if lower == "localhost" || lower == "[::1]" || lower == "0.0.0.0" {
+		return fmt.Errorf("CPANEL_HOST must not point to localhost or loopback addresses")
+	}
+
+	// Block cloud metadata endpoints (AWS, GCP, Azure)
+	if lower == "169.254.169.254" || lower == "metadata.google.internal" || strings.HasSuffix(lower, ".internal") {
+		return fmt.Errorf("CPANEL_HOST must not point to cloud metadata endpoints")
+	}
+
+	// If it's an IP, check against blocked CIDR ranges
+	if ip := net.ParseIP(host); ip != nil {
+		for _, cidr := range blockedCIDRs {
+			_, network, err := net.ParseCIDR(cidr)
+			if err != nil {
+				continue
+			}
+			if network.Contains(ip) {
+				return fmt.Errorf("CPANEL_HOST must not point to private, loopback, or link-local IP ranges")
+			}
+		}
 		return nil
 	}
+
 	// Basic hostname validation: no consecutive dots, no leading/trailing dots
 	if strings.HasPrefix(host, ".") || strings.HasSuffix(host, ".") || strings.Contains(host, "..") {
 		return fmt.Errorf("CPANEL_HOST has invalid hostname format")

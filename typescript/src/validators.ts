@@ -334,12 +334,23 @@ export function sanitizeToolError(e: unknown): string {
     // Return Zod validation errors as-is (they are user-facing and safe)
     return e.errors.map((err) => `${err.path.join(".")}: ${err.message}`).join("; ");
   }
-  const raw = e instanceof Error ? e.message : String(e);
+  let raw = e instanceof Error ? e.message : String(e);
+
+  // Redact any credential env var values that may be reflected in error messages
+  for (const envKey of ["CPANEL_API_TOKEN", "CPANEL_WHM_PASSWORD"]) {
+    const val = process.env[envKey];
+    if (val && val.length > 3) {
+      raw = raw.replaceAll(val, "[REDACTED]");
+    }
+  }
+
   return raw
     // Strip absolute file paths
     .replace(/\/[^\s:]+\.(ts|js|json|mjs|cjs)/g, "[path]")
     // Strip stack trace lines
     .replace(/\n\s+at\s+.*/g, "")
+    // Redact long alphanumeric sequences that look like tokens (32+ chars)
+    .replace(/[A-Za-z0-9_-]{32,}/g, "[redacted-token]")
     // Truncate overly long messages
     .slice(0, 500);
 }
