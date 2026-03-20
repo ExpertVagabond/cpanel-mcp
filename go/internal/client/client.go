@@ -6,8 +6,10 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"log"
 	"net/http"
 	"net/url"
+	"strings"
 	"time"
 
 	"github.com/ExpertVagabond/cpanel-mcp/internal/config"
@@ -28,9 +30,19 @@ func (e *CpanelApiError) Error() string {
 }
 
 func New(cfg *config.CpanelConfig) *CpanelClient {
+	skipVerify := !cfg.VerifySSL
+
+	// SECURITY WARNING: InsecureSkipVerify disables TLS certificate verification.
+	// This makes the connection vulnerable to man-in-the-middle attacks.
+	// Only use this for development/self-signed certs. Set CPANEL_VERIFY_SSL=true in production.
+	if skipVerify {
+		log.Println("[WARN] TLS certificate verification is DISABLED (InsecureSkipVerify=true). " +
+			"Set CPANEL_VERIFY_SSL=true for production environments to prevent MITM attacks.")
+	}
+
 	transport := &http.Transport{
 		TLSClientConfig: &tls.Config{
-			InsecureSkipVerify: !cfg.VerifySSL,
+			InsecureSkipVerify: skipVerify,
 		},
 	}
 	return &CpanelClient{
@@ -42,14 +54,44 @@ func New(cfg *config.CpanelConfig) *CpanelClient {
 	}
 }
 
+// sanitizeAuthComponent ensures a username or token value is safe for use
+// in the Authorization header. Strips control characters, newlines (header
+// injection), and null bytes. Returns an error if the value is empty after
+// sanitization.
+func sanitizeAuthComponent(name, value string) (string, error) {
+	// Strip control characters including CR/LF (prevent header injection)
+	cleaned := strings.Map(func(r rune) rune {
+		if r < 0x20 || r == 0x7f {
+			return -1 // drop the character
+		}
+		return r
+	}, value)
+	cleaned = strings.TrimSpace(cleaned)
+	if cleaned == "" {
+		return "", fmt.Errorf("%s is empty or contains only invalid characters", name)
+	}
+	return cleaned, nil
+}
+
 func (c *CpanelClient) Request(ctx context.Context, apiType, path string, params map[string]string) (json.RawMessage, error) {
 	port := c.cfg.Port
 	authPrefix := "cpanel"
 	authUser := c.cfg.Username
+	authToken := c.cfg.Token
 	if apiType == "whm" {
 		port = c.cfg.WHMPort
 		authPrefix = "whm"
 		authUser = c.cfg.WHMUsername
+	}
+
+	// Security: sanitize auth components to prevent header injection
+	cleanUser, err := sanitizeAuthComponent("username", authUser)
+	if err != nil {
+		return nil, fmt.Errorf("auth error: %w", err)
+	}
+	cleanToken, err := sanitizeAuthComponent("token", authToken)
+	if err != nil {
+		return nil, fmt.Errorf("auth error: %w", err)
 	}
 
 	u, err := url.Parse(fmt.Sprintf("https://%s:%d%s", c.cfg.Host, port, path))
@@ -68,7 +110,7 @@ func (c *CpanelClient) Request(ctx context.Context, apiType, path string, params
 	if err != nil {
 		return nil, err
 	}
-	req.Header.Set("Authorization", fmt.Sprintf("%s %s:%s", authPrefix, authUser, c.cfg.Token))
+	req.Header.Set("Authorization", fmt.Sprintf("%s %s:%s", authPrefix, cleanUser, cleanToken))
 	req.Header.Set("Accept", "application/json")
 
 	resp, err := c.client.Do(req)

@@ -7,8 +7,52 @@ import {
 
 import type { McpAction } from "./types.js";
 import { errorResult } from "./types.js";
-import { validateConfig } from "./config.js";
+import { config, validateConfig } from "./config.js";
 import { sanitizeToolError } from "./validators.js";
+
+// ---------------------------------------------------------------------------
+// Security: operation logger (never logs credentials)
+// ---------------------------------------------------------------------------
+
+function logOperation(action: string, success: boolean, durationMs?: number): void {
+  const entry = {
+    timestamp: new Date().toISOString(),
+    action,
+    success,
+    ...(durationMs !== undefined && { durationMs }),
+  };
+  console.error(`[audit] ${JSON.stringify(entry)}`);
+}
+
+// ---------------------------------------------------------------------------
+// Security: credential presence guard
+// ---------------------------------------------------------------------------
+
+function assertCredentials(): string | null {
+  if (!config.host || !config.username || !config.token) {
+    return "Server credentials not configured — set CPANEL_HOST, CPANEL_USERNAME, and CPANEL_API_TOKEN";
+  }
+  return null;
+}
+
+// ---------------------------------------------------------------------------
+// Security: parameter sanitization
+// ---------------------------------------------------------------------------
+
+/** Strip null bytes and control characters from string parameters */
+function sanitizeParams(params: Record<string, unknown> | undefined): Record<string, unknown> | undefined {
+  if (!params || typeof params !== "object") return params;
+  const cleaned: Record<string, unknown> = {};
+  for (const [key, value] of Object.entries(params)) {
+    if (typeof value === "string") {
+      // Remove null bytes and ASCII control characters (except newline, tab)
+      cleaned[key] = value.replace(/[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]/g, "");
+    } else {
+      cleaned[key] = value;
+    }
+  }
+  return cleaned;
+}
 
 // Email tools
 import { emailListAccounts } from "./tools/email/list-accounts.js";
@@ -150,8 +194,10 @@ const actions: McpAction[] = [
 ];
 
 const handlerMap = new Map<string, McpAction["handler"]>();
+const validToolNames = new Set<string>();
 for (const action of actions) {
   handlerMap.set(action.tool.name, action.handler);
+  validToolNames.add(action.tool.name);
 }
 
 function createServer() {
@@ -172,13 +218,37 @@ function createServer() {
   }));
 
   server.setRequestHandler(CallToolRequestSchema, async (request) => {
-    const handler = handlerMap.get(request.params.name);
-    if (!handler) {
-      return errorResult(`Unknown tool: ${request.params.name}`);
+    const start = Date.now();
+    const toolName = request.params.name;
+
+    // Security: validate credentials are present before any operation
+    const credError = assertCredentials();
+    if (credError) {
+      logOperation(toolName, false);
+      return errorResult(credError);
     }
+
+    // Security: validate tool name against allowlist
+    if (!validToolNames.has(toolName)) {
+      logOperation(toolName, false);
+      return errorResult(`Unknown tool: ${toolName}`);
+    }
+
+    const handler = handlerMap.get(toolName)!;
+
+    // Security: sanitize string parameters
+    if (request.params.arguments) {
+      request.params.arguments = sanitizeParams(
+        request.params.arguments as Record<string, unknown>,
+      ) as typeof request.params.arguments;
+    }
+
     try {
-      return await handler(request);
+      const result = await handler(request);
+      logOperation(toolName, !result.isError, Date.now() - start);
+      return result;
     } catch (e) {
+      logOperation(toolName, false, Date.now() - start);
       return errorResult(sanitizeToolError(e));
     }
   });
