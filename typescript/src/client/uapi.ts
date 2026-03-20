@@ -40,7 +40,7 @@ export async function uapi<T = unknown>(
 
   if (result.status !== 1) {
     const errors = result.errors?.join("; ") || "Unknown UAPI error";
-    throw new CpanelApiError(0, errors, raw);
+    throw new CpanelApiError(0, errors);
   }
 
   return result.data;
