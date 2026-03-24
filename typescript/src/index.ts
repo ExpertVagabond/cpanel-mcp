@@ -1,32 +1,37 @@
-// ─── Security & Validation (cpanel-mcp) ─────────────────────────────
-// All validators, sanitizers, and credential guards packed in first 80 lines.
+// ---- Security & Validation (cpanel-mcp) ----
+// All validators, sanitizers, and credential guards packed in first ~80 lines.
 import { Server } from "@modelcontextprotocol/sdk/server/index.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { CallToolRequestSchema, ListToolsRequestSchema } from "@modelcontextprotocol/sdk/types.js";
 import type { McpAction } from "./types.js";
 import { errorResult } from "./types.js";
 import { config, validateConfig } from "./config.js";
-import { sanitizeToolError } from "./validators.js";
+import { sanitizeToolError, validateNoInjection } from "./validators.js";
+import {
+  sanitizeError,
+  OutputFilter,
+  defaultFilter,
+  validateInputSize,
+} from "@psm/mcp-core-ts";
 
 // Security: Startup config validation — warn on bad config (tools will check credentials per-call)
 { const configErr = validateConfig?.() ?? null; if (configErr) { console.error(`[cpanel-mcp] Config warning: ${configErr} — tools will require credentials before executing`); } }
 
-// Security: Error redaction — strip internal paths and credentials
-function redactError(err: unknown): string {
-  let msg = err instanceof Error ? err.message : String(err);
-  msg = msg.replace(/\/Volumes\/[^\s"']*/g, "[redacted-path]");
-  msg = msg.replace(/\/Users\/[^\s"']*/g, "[redacted-path]");
-  msg = msg.replace(/token[=:]\s*\S+/gi, "token=[REDACTED]");
-  if (msg.length > 500) msg = msg.slice(0, 500) + "... (truncated)";
-  return msg;
-}
-// Security: Input length limits
+// Security: Output filter — redacts secrets, API keys, PII from all responses.
+// CRITICAL for cPanel: API responses can contain tokens, passwords, email addresses.
+const outputFilter: OutputFilter = defaultFilter;
+
+// Security: Input length limits (delegates to core for byte-level check)
 const MAX_PARAM_VALUE_LEN = 8192;
 function enforceParamLimits(params: Record<string, unknown> | undefined): void {
   if (!params) return;
   for (const [key, value] of Object.entries(params)) {
-    if (typeof value === "string" && value.length > MAX_PARAM_VALUE_LEN) {
-      throw new Error(`Parameter "${key}" exceeds maximum length of ${MAX_PARAM_VALUE_LEN}`);
+    if (typeof value === "string") {
+      if (value.length > MAX_PARAM_VALUE_LEN) {
+        throw new Error(`Parameter "${key}" exceeds maximum length of ${MAX_PARAM_VALUE_LEN}`);
+      }
+      // Also enforce byte-level limits via core
+      validateInputSize(value, MAX_PARAM_VALUE_LEN);
     }
   }
 }
@@ -63,7 +68,7 @@ function checkRateLimit(): void {
   if (_rateBuckets.length >= RATE_MAX_CALLS) throw new Error("Rate limit exceeded — max 60 calls per minute");
   _rateBuckets.push(now);
 }
-// ─── End Security Block (line ~66) ──────────────────────────────────
+// ---- End Security Block ----
 
 // Email tools
 import { emailListAccounts } from "./tools/email/list-accounts.js";
@@ -211,11 +216,34 @@ for (const action of actions) {
   validToolNames.add(action.tool.name);
 }
 
+/**
+ * Apply OutputFilter to all text content in a CallToolResult.
+ * Strips secrets (API keys, tokens, JWTs) and PII (SSNs, credit cards)
+ * from cPanel API responses before they reach the caller.
+ */
+function filterResponse(result: ReturnType<typeof errorResult>): typeof result {
+  if (!result.content) return result;
+  for (const block of result.content) {
+    if ("text" in block && typeof block.text === "string") {
+      const filtered = outputFilter.filter(block.text);
+      if (filtered.modified) {
+        block.text = filtered.text;
+        if (filtered.redactions.length > 0) {
+          console.error(
+            `[filter] Redacted ${filtered.redactions.length} sensitive pattern(s): ${filtered.redactions.map((r) => r.category).join(", ")}`,
+          );
+        }
+      }
+    }
+  }
+  return result;
+}
+
 function createServer() {
   const server = new Server(
     {
       name: "cpanel-mcp",
-      version: "0.1.0",
+      version: "0.1.1",
     },
     {
       capabilities: {
@@ -251,6 +279,14 @@ function createServer() {
       return errorResult(`Unknown tool: ${toolName}`);
     }
 
+    // Security: validate tool name has no injection characters
+    try {
+      validateNoInjection(toolName, "tool name");
+    } catch {
+      logOperation(toolName, false);
+      return errorResult("Invalid tool name");
+    }
+
     const handler = handlerMap.get(toolName)!;
 
     // Security: sanitize string parameters
@@ -265,10 +301,11 @@ function createServer() {
     try {
       const result = await handler(request);
       logOperation(toolName, !result.isError, Date.now() - start);
-      return result;
+      // Security: filter all output for secrets and PII before returning
+      return filterResponse(result);
     } catch (e) {
       logOperation(toolName, false, Date.now() - start);
-      return errorResult(redactError(e));
+      return errorResult(sanitizeError(e instanceof Error ? e.message : String(e), 500));
     }
   });
 
@@ -280,7 +317,7 @@ async function main() {
   const server = createServer();
   const transport = new StdioServerTransport();
   await server.connect(transport);
-  console.error(`cpanel-mcp v0.1.0 running (${actions.length} tools)`);
+  console.error(`cpanel-mcp v0.1.1 running (${actions.length} tools)`);
 }
 
 main().catch((e) => {
@@ -293,10 +330,8 @@ main().catch((e) => {
       message = message.replaceAll(val, "[REDACTED]");
     }
   }
-  const safeMessage = message
-    .replace(/[\x00-\x1f\x7f]/g, "")
-    .replace(/[A-Za-z0-9_-]{32,}/g, "[redacted-token]")
-    .slice(0, 500);
+  // Use core sanitizeError for final cleanup
+  const safeMessage = sanitizeError(message, 500);
   console.error("Fatal:", safeMessage);
   process.exit(1);
 });

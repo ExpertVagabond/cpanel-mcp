@@ -1,5 +1,6 @@
 import { config } from "../config.js";
 import https from "node:https";
+import { sanitizeError } from "@psm/mcp-core-ts";
 
 // Create a custom HTTPS agent for cPanel requests when SSL verification is disabled
 // This scopes the TLS bypass to only cPanel API calls instead of the entire process
@@ -189,7 +190,8 @@ export async function request<T>(
     const safeMessage = message
       .replace(config.token, redact(config.token))
       .replace(config.host, "[host]");
-    throw new CpanelApiError(0, `Network error: ${safeMessage}`);
+    // Apply core sanitizeError as additional safety layer — strips file paths, redacts long tokens
+    throw new CpanelApiError(0, `Network error: ${sanitizeError(safeMessage, 500)}`);
   } finally {
     clearTimeout(timer);
   }
