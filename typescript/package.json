@@ -42,6 +42,7 @@
   "license": "MIT",
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.8.0",
+    "@psm/mcp-core-ts": "file:../../psm-mcp-core-ts",
     "zod": "^3.23.8",
     "zod-to-json-schema": "^3.23.5"
   },

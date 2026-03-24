@@ -4,8 +4,11 @@
  * Every user-facing string parameter is validated against format constraints
  * to prevent injection attacks, path traversal, and malformed input from
  * reaching the cPanel/WHM API layer.
+ *
+ * Error sanitization delegates to @psm/mcp-core-ts sanitizeError().
  */
 import { z } from "zod";
+import { sanitizeError, validateNoInjection } from "@psm/mcp-core-ts";
 
 // ---------------------------------------------------------------------------
 // Domain & hostname validation
@@ -327,7 +330,8 @@ export const quotaSchema = z
 
 /**
  * Wraps an error message to prevent internal information leakage.
- * Strips file paths, stack traces, and credential-like patterns.
+ * Delegates to @psm/mcp-core-ts sanitizeError() for path stripping and
+ * token redaction, with cPanel-specific credential scrubbing on top.
  */
 export function sanitizeToolError(e: unknown): string {
   if (e instanceof z.ZodError) {
@@ -344,13 +348,9 @@ export function sanitizeToolError(e: unknown): string {
     }
   }
 
-  return raw
-    // Strip absolute file paths
-    .replace(/\/[^\s:]+\.(ts|js|json|mjs|cjs)/g, "[path]")
-    // Strip stack trace lines
-    .replace(/\n\s+at\s+.*/g, "")
-    // Redact long alphanumeric sequences that look like tokens (32+ chars)
-    .replace(/[A-Za-z0-9_-]{32,}/g, "[redacted-token]")
-    // Truncate overly long messages
-    .slice(0, 500);
+  // Delegate to core sanitizeError for path/token redaction + truncation
+  return sanitizeError(raw, 500);
 }
+
+// Re-export validateNoInjection for use in tools that need direct injection checks
+export { validateNoInjection };
