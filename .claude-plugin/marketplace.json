@@ -1,0 +1,19 @@
+{
+  "name": "cpanel-mcp",
+  "owner": {
+    "name": "Purple Squirrel Media",
+    "email": "matthew@purplesquirrelmedia.io",
+    "github": "ExpertVagabond"
+  },
+  "plugins": [
+    {
+      "name": "cpanel-mcp",
+      "source": ".",
+      "description": "47-tool MCP server for cPanel/WHM — domains, email, DNS, MySQL, SSL, FTP",
+      "version": "0.1.1",
+      "category": "infrastructure",
+      "tools": 47,
+      "homepage": "https://github.com/ExpertVagabond/cpanel-mcp"
+    }
+  ]
+}
