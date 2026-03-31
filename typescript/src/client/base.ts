@@ -78,6 +78,26 @@ function validateHost(host: string): void {
   if (/^(10\.|172\.(1[6-9]|2\d|3[01])\.|192\.168\.|169\.254\.)/.test(lower)) {
     throw new Error("CPANEL_HOST must not point to private or link-local IP ranges");
   }
+
+  // Block IPv6-mapped IPv4 addresses (::ffff:x.x.x.x) that bypass IPv4 checks above
+  // Also block bare IPv6 localhost (::1) without brackets
+  const stripped = lower.replace(/^\[|\]$/g, ""); // strip optional brackets
+  if (stripped === "::1") {
+    throw new Error("CPANEL_HOST must not point to localhost or loopback addresses");
+  }
+  if (/^::ffff:/.test(stripped)) {
+    const mapped = stripped.replace(/^::ffff:/, "");
+    // Re-check the mapped IPv4 address against all private/loopback/metadata ranges
+    if (
+      mapped === "127.0.0.1" ||
+      mapped.startsWith("127.") ||
+      mapped === "0.0.0.0" ||
+      mapped === "169.254.169.254" ||
+      /^(10\.|172\.(1[6-9]|2\d|3[01])\.|192\.168\.|169\.254\.)/.test(mapped)
+    ) {
+      throw new Error("CPANEL_HOST must not point to private or loopback addresses (IPv6-mapped)");
+    }
+  }
 }
 
 /**

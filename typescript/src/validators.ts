@@ -195,6 +195,12 @@ export const cronFieldSchema = (fieldName: string, min: number, max: number) =>
 /**
  * Validates a cron command.
  * Blocks known dangerous patterns while allowing legitimate shell commands.
+ *
+ * SECURITY NOTE: This uses a denylist approach, which is inherently incomplete.
+ * Determined attackers can bypass denylists via encoding tricks, shell features,
+ * or novel patterns not yet covered. This validator reduces the attack surface
+ * but is NOT a substitute for proper sandboxing, least-privilege execution, or
+ * allowlist-based command validation in high-security environments.
  */
 export const cronCommandSchema = z
   .string()
@@ -213,6 +219,9 @@ export const cronCommandSchema = z
         />\s*\/dev\//, // Writing to devices
         /\beval\b/, // eval
         /\bexec\b.*</, // exec with redirection
+        /\$\{IFS\}/, // IFS-based whitespace bypass (e.g. cat${IFS}/etc/passwd)
+        /\$'\\x[0-9a-fA-F]/, // Hex-encoded character injection ($'\x2f' = /)
+        /\$\(/, // Unclosed command substitution (catches $( without closing paren too)
       ];
       return !dangerous.some((pattern) => pattern.test(val));
     },
