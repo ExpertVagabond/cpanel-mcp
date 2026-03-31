@@ -42,8 +42,8 @@ describe("validateConfig", () => {
     token: "abc123",
     port: 2083,
     whmPort: 2087,
-    whmUsername: "root",
-    verifySsl: false,
+    whmUsername: "admin",
+    verifySsl: true,
     timeout: 30000,
   };
 

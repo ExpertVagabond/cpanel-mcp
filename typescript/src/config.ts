@@ -35,8 +35,8 @@ export const config: CpanelConfig = {
   token: process.env.CPANEL_API_TOKEN || "",
   port: parsePort("CPANEL_PORT", 2083),
   whmPort: parsePort("CPANEL_WHM_PORT", 2087),
-  whmUsername: process.env.CPANEL_WHM_USERNAME || "root",
-  verifySsl: process.env.CPANEL_VERIFY_SSL === "true",
+  whmUsername: process.env.CPANEL_WHM_USERNAME || "",
+  verifySsl: process.env.CPANEL_VERIFY_SSL !== "false",
   timeout: parseTimeout(30),
 };
 
@@ -48,11 +48,11 @@ export function validateConfig(): void {
   if (!config.token) throw new Error("CPANEL_API_TOKEN environment variable is required");
   if (/[\x00-\x1f\x7f]/.test(config.token)) throw new Error("CPANEL_API_TOKEN must not contain control characters");
 
-  // Warn about InsecureSkipVerify
+  // Warn when TLS verification is explicitly disabled
   if (!config.verifySsl) {
     console.error(
-      "[WARN] TLS certificate verification is DISABLED. " +
-      "Set CPANEL_VERIFY_SSL=true for production environments to prevent MITM attacks.",
+      "[WARN] TLS certificate verification is DISABLED (CPANEL_VERIFY_SSL=false). " +
+      "This exposes connections to MITM attacks. Remove CPANEL_VERIFY_SSL=false for production environments.",
     );
   }
 }
