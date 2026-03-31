@@ -133,6 +133,12 @@ export async function request<T>(
   validateHost(config.host);
   validateToken(config.token);
   const authUser = apiType === "uapi" ? config.username : config.whmUsername;
+  if (apiType === "whm" && !authUser) {
+    throw new Error(
+      "CPANEL_WHM_USERNAME environment variable is required for WHM operations. " +
+      "No default is provided — set it explicitly (e.g. CPANEL_WHM_USERNAME=root).",
+    );
+  }
   validateUsername(authUser);
 
   const port = apiType === "uapi" ? config.port : config.whmPort;
