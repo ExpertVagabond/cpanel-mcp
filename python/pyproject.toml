@@ -9,7 +9,7 @@ description = "cPanel & WHM MCP Server — manage hosting via Model Context Prot
 readme = "README.md"
 license = "MIT"
 requires-python = ">=3.10"
-authors = [{ name = "Purple Squirrel Media" }]
+authors = [{ name = "Matthew Karsten", email = "matthewkarstenconnects@gmail.com" }]
 keywords = ["cpanel", "whm", "hosting", "mcp", "model-context-protocol"]
 classifiers = [
     "Development Status :: 3 - Alpha",
